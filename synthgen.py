@@ -7,12 +7,12 @@ Main script for synthetic text rendering.
 
 from __future__ import division
 import copy
-import cv2
+import cv2 as cv
 import h5py
 from PIL import Image
-import numpy as np 
+import numpy as np
 #import mayavi.mlab as mym
-import matplotlib.pyplot as plt 
+import matplotlib.pyplot as plt
 import os.path as osp
 import scipy.ndimage as sim
 import scipy.spatial.distance as ssd
@@ -62,7 +62,7 @@ class TextRegions(object):
         if return_rot:
             return h,w,R
         return h,w
- 
+
     @staticmethod
     def filter(seg,area,label):
         """
@@ -77,11 +77,11 @@ class TextRegions(object):
             xs,ys = np.where(mask)
 
             coords = np.c_[xs,ys].astype('float32')
-            rect = cv2.minAreaRect(coords)          
-            box = np.array(cv2.cv.BoxPoints(rect))
+            rect = cv.minAreaRect(coords)
+            box = np.array(cv.boxPoints(rect))
             h,w,rot = TextRegions.get_hw(box,return_rot=True)
 
-            f = (h > TextRegions.minHeight 
+            f = (h > TextRegions.minHeight
                 and w > TextRegions.minWidth
                 and TextRegions.minAspect < w/h < TextRegions.maxAspect
                 and area[idx]/w*h > TextRegions.pArea)
@@ -178,7 +178,7 @@ class TextRegions(object):
 
 def rescale_frontoparallel(p_fp,box_fp,p_im):
     """
-    The fronto-parallel image region is rescaled to bring it in 
+    The fronto-parallel image region is rescaled to bring it in
     the same approx. size as the target region size.
 
     p_fp : nx2 coordinates of countour points in the fronto-parallel plane
@@ -215,9 +215,9 @@ def get_text_placement_mask(xyz,mask,plane,pad=2,viz=False):
     REGION : DICT output of TextRegions.get_regions
     PAD : number of pixels to pad the placement-mask by
     """
-    contour,hier = cv2.findContours(mask.copy().astype('uint8'),
-                                    mode=cv2.cv.CV_RETR_CCOMP,
-                                    method=cv2.cv.CV_CHAIN_APPROX_SIMPLE)
+    contour,hier = cv.findContours(mask.copy().astype('uint8'),
+                                    mode=cv.RETR_CCOMP,
+                                    method=cv.CHAIN_APPROX_SIMPLE)
     contour = [np.squeeze(c).astype('float') for c in contour]
     #plane = np.array([plane[1],plane[0],plane[2],plane[3]])
     H,W = mask.shape[:2]
@@ -235,15 +235,15 @@ def get_text_placement_mask(xyz,mask,plane,pad=2,viz=False):
         pts.append(cnt_ij)
 
     # unrotate in 2D plane:
-    rect = cv2.minAreaRect(pts_fp[0].copy().astype('float32'))
-    box = np.array(cv2.cv.BoxPoints(rect))
+    rect = cv.minAreaRect(pts_fp[0].copy().astype('float32'))
+    box = np.array(cv.boxPoints(rect))
     R2d = su.unrotate2d(box.copy())
     box = np.vstack([box,box[0,:]]) #close the box for visualization
 
     mu = np.median(pts_fp[0],axis=0)
     pts_tmp = (pts_fp[0]-mu[None,:]).dot(R2d.T) + mu[None,:]
     boxR = (box-mu[None,:]).dot(R2d.T) + mu[None,:]
-    
+
     # rescale the unrotated 2d points to approximately
     # the same scale as the target region:
     s = rescale_frontoparallel(pts_tmp,boxR,pts[0])
@@ -259,19 +259,19 @@ def get_text_placement_mask(xyz,mask,plane,pad=2,viz=False):
     place_mask = 255*np.ones((np.ceil(COL)+pad,np.ceil(ROW)+pad),'uint8')
 
     pts_fp_i32 = [(pts_fp[i]+minxy[None,:]).astype('int32') for i in xrange(len(pts_fp))]
-    cv2.drawContours(place_mask,pts_fp_i32,-1,0,
-                     thickness=cv2.cv.CV_FILLED,
+    cv.drawContours(place_mask,pts_fp_i32,-1,0,
+                     thickness=cv.FILLED,
                      lineType=8,hierarchy=hier)
-    
+
     if not TextRegions.filter_rectified((~place_mask).astype('float')/255):
         return
 
     # calculate the homography
-    H,_ = cv2.findHomography(pts[0].astype('float32').copy(),
+    H,_ = cv.findHomography(pts[0].astype('float32').copy(),
                              pts_fp_i32[0].astype('float32').copy(),
                              method=0)
 
-    Hinv,_ = cv2.findHomography(pts_fp_i32[0].astype('float32').copy(),
+    Hinv,_ = cv.findHomography(pts_fp_i32[0].astype('float32').copy(),
                                 pts[0].astype('float32').copy(),
                                 method=0)
     if viz:
@@ -307,7 +307,7 @@ def viz_masks(fignum,rgb,seg,depth,label):
     for i,idx in enumerate(label):
         mask = seg==idx
         rgb_rand = (255*np.random.rand(3)).astype('uint8')
-        img[mask] = rgb_rand[None,None,:] 
+        img[mask] = rgb_rand[None,None,:]
 
     #import scipy
     # scipy.misc.imsave('seg.png', mim)
@@ -341,7 +341,7 @@ def viz_regions(img,xyz,seg,planes,labels):
     mym.view(180,180)
     mym.orientation_axes()
     mym.show(True)
- 
+
 def viz_textbb(fignum,text_im, bb_list,alpha=1.0):
     """
     text_im : image containing text
@@ -405,8 +405,8 @@ class RendererV3(object):
         return regions
 
     def warpHomography(self,src_mat,H,dst_size):
-        dst_mat = cv2.warpPerspective(src_mat, H, dst_size,
-                                      flags=cv2.WARP_INVERSE_MAP|cv2.INTER_LINEAR)
+        dst_mat = cv.warpPerspective(src_mat, H, dst_size,
+                                      flags=cv.WARP_INVERSE_MAP|cv.INTER_LINEAR)
         return dst_mat
 
     def homographyBB(self, bbs, H, offset=None):
@@ -493,7 +493,7 @@ class RendererV3(object):
         else:
             bsz = max(0.5, 1.5 + 0.5*np.random.randn())
             ksz = 5
-        return cv2.GaussianBlur(text_mask,(ksz,ksz),bsz)
+        return cv.GaussianBlur(text_mask,(ksz,ksz),bsz)
 
     def place_text(self,rgb,collision_mask,H,Hinv):
         font = self.text_renderer.font_state.sample()
@@ -505,8 +505,8 @@ class RendererV3(object):
         else:
             text_mask,loc,bb,text = render_res
             #text=text.decode('utf-8')
-            
-        
+
+
         # update the collision mask with text:
         collision_mask += (255 * (text_mask>0)).astype('uint8')
 
@@ -555,15 +555,15 @@ class RendererV3(object):
         wrds = text.split()
         bb_idx = np.r_[0, np.cumsum([len(w) for w in wrds])]
         wordBB = np.zeros((2,4,len(wrds)), 'float32')
-        
+
         for i in xrange(len(wrds)):
             cc = charBB[:,:,bb_idx[i]:bb_idx[i+1]]
 
             # fit a rotated-rectangle:
             # change shape from 2x4xn_i -> (4*n_i)x2
             cc = np.squeeze(np.concatenate(np.dsplit(cc,cc.shape[-1]),axis=1)).T.astype('float32')
-            rect = cv2.minAreaRect(cc.copy())
-            box = np.array(cv2.cv.BoxPoints(rect))
+            rect = cv.minAreaRect(cc.copy())
+            box = np.array(cv.boxPoints(rect))
 
             # find the permutation of box-coordinates which
             # are "aligned" appropriately with the character-bb.
@@ -595,7 +595,7 @@ class RendererV3(object):
                     used to place text.
 
         @return:
-            res : a list of dictionaries, one for each of 
+            res : a list of dictionaries, one for each of
                   the image instances.
                   Each dictionary has the following structure:
                       'img' : rgb-image with text on it.
@@ -605,14 +605,14 @@ class RendererV3(object):
 
                   The correspondence b/w bb and txt is that
                   i-th non-space white-character in txt is at bb[:,:,i].
-            
-            If there's an error in pre-text placement, for e.g. if there's 
+
+            If there's an error in pre-text placement, for e.g. if there's
             no suitable region for text placement, an empty list is returned.
         """
         try:
             # depth -> xyz
             xyz = su.DepthCamera.depth2xyz(depth)
-            
+
             # find text-regions:
             regions = TextRegions.get_regions(xyz,seg,area,label)
 
@@ -647,7 +647,7 @@ class RendererV3(object):
             itext = []
             ibb = []
 
-            # process regions: 
+            # process regions:
             num_txt_regions = len(reg_idx)
             NUM_REP = 5 # re-use each region three times:
             reg_range = np.arange(NUM_REP * num_txt_regions) % num_txt_regions
@@ -694,5 +694,5 @@ class RendererV3(object):
                     viz_masks(2,img,seg,depth,regions['label'])
                     # viz_regions(rgb.copy(),xyz,seg,regions['coeff'],regions['label'])
                     if i < ninstance-1:
-                        raw_input(colorize(Color.BLUE,'continue?',True))                    
+                        raw_input(colorize(Color.BLUE,'continue?',True))
         return res
