@@ -5,16 +5,16 @@
 % Author: Ankush Gupta
 
 % path to the directory containing images, which need to be segmented
-img_dir = 'dir/containing/images';
+img_dir = '/home/momo/liuchengyu/deep_learning/ocr/data/Train/tmp/';
 % path to the mcg/pre-trained directory.
-mcg_dir = '/path/to/mcg/pre-trained';
+mcg_dir = '/home/momo/liuchengyu/deep_learning/ocr/mcg/pre-trained';
 
 imsize = [240,NaN];
 % "install" the MCG toolbox:
 run(fullfile(mcg_dir,'install.m'));
 
 % get the image names:
-imname = dir(fullfile(img_dir,'*'));
+imname = dir(fullfile(img_dir,'*.jpg'));
 imname = {imname.name};
 
 % process:
@@ -35,4 +35,4 @@ parfor i = 1:numel(imname)
 	names{i} = imname{i};
 	ucms{i} = im2ucm(im,'fast');
 end
-save('ucm.mat','ucms','names','-v7.3');
+save('/home/momo/data/ucm.mat','ucms','names','-v7.3');
